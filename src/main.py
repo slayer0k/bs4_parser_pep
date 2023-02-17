@@ -8,27 +8,16 @@ from tqdm import tqdm
 
 from configs import configure_argument_parser, configure_logging
 from constants import BASE_DIR, EXPECTED_STATUS, MAIN_DOC_URL, PEP_URL
+from exceptions import WrongTarget
 from outputs import control_output
-from utils import find_tag, get_response
+from utils import find_tag, get_response, making_soup
 
 
 def whats_new(session):
     whats_new_url = urljoin(MAIN_DOC_URL, 'whatsnew/')
-    response = get_response(session, whats_new_url)
-    if not response:
-        return
-    soup = BeautifulSoup(response.text, 'lxml')
-    main_div = find_tag(
-        soup, 'section', attrs={'id': 'what-s-new-in-python'}
-    )
-    div_with_ul = find_tag(
-        main_div, 'div', attrs={'class': 'toctree-wrapper'}
-    )
-    div_with_ul = main_div.find(
-        'div', attrs={'class': 'toctree-wrapper'}
-    )
-    sections_by_python = div_with_ul.find_all(
-        'li', attrs={'class': 'toctree-l1'}
+    soup = making_soup(session, whats_new_url)
+    sections_by_python = soup.select(
+        '#what-s-new-in-python div.toctree-wrapper li.toctree-l1'
     )
     result = [('Ссылка на статью', 'Заголовок', 'Редактор, Автор')]
     for section in tqdm(sections_by_python):
@@ -37,6 +26,7 @@ def whats_new(session):
         version_link = urljoin(whats_new_url, href)
         response = get_response(session, version_link)
         if not response:
+            logging.error(f'не отвечает страница: {version_link}')
             continue
         soup = BeautifulSoup(response.text, 'lxml')
         h1 = find_tag(soup, 'h1')
@@ -47,10 +37,7 @@ def whats_new(session):
 
 
 def latest_versions(session):
-    response = get_response(session, MAIN_DOC_URL)
-    if not response:
-        return
-    soup = BeautifulSoup(response.text, 'lxml')
+    soup = making_soup(session, MAIN_DOC_URL)
     sidebar = find_tag(
         soup, 'div', attrs={'class': 'sphinxsidebarwrapper'}
     )
@@ -60,7 +47,7 @@ def latest_versions(session):
             a_tags = ul.find_all('a')
             break
         else:
-            raise Exception('Тут ничего нет')
+            raise WrongTarget('Тут ничего нет')
     result = [('Ссылка на документацию', 'Версия', 'Статус')]
     for url in tqdm(a_tags):
         link = url['href']
@@ -76,10 +63,7 @@ def latest_versions(session):
 
 def download(session):
     downloads_url = urljoin(MAIN_DOC_URL, 'download.html')
-    response = get_response(session, downloads_url)
-    if not response:
-        return
-    soup = BeautifulSoup(response.text, 'lxml')
+    soup = making_soup(session, downloads_url)
     table_tag = find_tag(
         soup, 'table', attrs={'class': 'docutils'}
     )
@@ -89,18 +73,17 @@ def download(session):
     pdf_a4_link = pdf_a4_tag['href']
     archive_url = urljoin(downloads_url, pdf_a4_link)
     filename = archive_url.split('/')[-1]
-    downloads_dir = BASE_DIR / 'downloads'
-    downloads_dir.mkdir(exist_ok=True)
-    archive_path = downloads_dir / filename
-    response = session.get(archive_url)
+    dowloads_dir = BASE_DIR / 'downloads'
+    dowloads_dir.mkdir(exist_ok=True)
+    archive_path = dowloads_dir / filename
+    response = get_response(session, archive_url)
     with open(archive_path, 'wb') as file:
         file.write(response.content)
     logging.info(f'Архив был загружен и сохранен в {archive_path}')
 
 
 def pep(session):
-    response = get_response(session, PEP_URL)
-    soup = BeautifulSoup(response.text, 'lxml')
+    soup = making_soup(session, PEP_URL)
     numerical_section = find_tag(
         soup, 'section', attrs={'id': 'numerical-index'}
     )
@@ -152,19 +135,25 @@ MODE_TO_FUNCTION = {
 
 
 def main():
-    configure_logging()
-    logging.info('Парсер запущен!')
-    arg_parser = configure_argument_parser(MODE_TO_FUNCTION)
-    args = arg_parser.parse_args()
-    logging.info(f'аргументы командной строки: {args}')
-    session = requests_cache.CachedSession()
-    if args.clear_cache:
-        session.cache.clear()
-    parser_mode = args.mode
-    results = MODE_TO_FUNCTION[parser_mode](session)
-    if results:
-        control_output(results, args)
-    logging.info('Парсер закончил работу')
+    try:
+        configure_logging()
+        logging.info('Парсер запущен!')
+        arg_parser = configure_argument_parser(MODE_TO_FUNCTION)
+        args = arg_parser.parse_args()
+        logging.info(f'аргументы командной строки: {args}')
+        session = requests_cache.CachedSession()
+        if args.clear_cache:
+            session.cache.clear()
+        parser_mode = args.mode
+        results = MODE_TO_FUNCTION[parser_mode](session)
+        if results:
+            control_output(results, args)
+        logging.info('Парсер закончил работу')
+    except Exception as error:
+        logging.error(
+            f'при выполнении парсинга возникла ошибка: {error}',
+            stack_info=True
+        )
 
 
 if __name__ == '__main__':
