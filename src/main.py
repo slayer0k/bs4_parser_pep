@@ -84,13 +84,7 @@ def download(session):
 
 def pep(session):
     soup = making_soup(session, PEP_URL)
-    numerical_section = find_tag(
-        soup, 'section', attrs={'id': 'numerical-index'}
-    )
-    table_tag = find_tag(
-        numerical_section, 'tbody'
-    )
-    tr_tags = table_tag.find_all('tr')
+    tr_tags = soup.select('#numerical-index tbody tr')
     results = {}
     for tr_tag in tqdm(tr_tags):
         status_tag = tr_tag.td
