@@ -8,7 +8,3 @@ class NotResponded(Exception):
 
 class WrongTarget(Exception):
     pass
-
-
-class MakingSoupException(Exception):
-    pass
