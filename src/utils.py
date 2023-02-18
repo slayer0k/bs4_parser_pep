@@ -6,10 +6,10 @@ from requests import RequestException
 from exceptions import NotResponded, ParserFindTagException
 
 
-def get_response(session, url):
+def get_response(session, url, encoding='utf-8'):
     try:
         response = session.get(url)
-        response.encoding = 'utf-8'
+        response.encoding = encoding
         return response
     except RequestException as error:
         raise NotResponded(
@@ -26,6 +26,6 @@ def find_tag(soup, tag, attrs=None):
     return searched_tag
 
 
-def making_soup(session, url):
+def making_soup(session, url, formating='lxml'):
     response = get_response(session, url)
-    return BeautifulSoup(response.text, 'lxml')
+    return BeautifulSoup(response.text, formating)

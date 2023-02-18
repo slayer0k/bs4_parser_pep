@@ -2,7 +2,6 @@ import logging
 import re
 from urllib.parse import urljoin
 
-from bs4 import BeautifulSoup
 import requests_cache
 from tqdm import tqdm
 
@@ -24,11 +23,7 @@ def whats_new(session):
         version_a_tag = section.find('a')
         href = version_a_tag['href']
         version_link = urljoin(whats_new_url, href)
-        response = get_response(session, version_link)
-        if not response:
-            logging.error(f'не отвечает страница: {version_link}')
-            continue
-        soup = BeautifulSoup(response.text, 'lxml')
+        soup = making_soup(session, version_link)
         h1 = find_tag(soup, 'h1')
         dl = find_tag(soup, 'dl')
         dl_text = dl.text.replace('\n', ' ')
@@ -93,8 +88,7 @@ def pep(session):
             status_tag.find_next_sibling('td'), 'a'
         ).get('href')
         pep_article_url = urljoin(PEP_URL, pep_link)
-        response = get_response(session, pep_article_url)
-        soup = BeautifulSoup(response.text, 'lxml')
+        soup = making_soup(session, pep_article_url)
         dl_tag = find_tag(
             soup, 'dl', attrs={'class': 'rfc2822 field-list simple'}
         )
